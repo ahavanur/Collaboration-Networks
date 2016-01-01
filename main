@@ -1,0 +1,252 @@
+# This is an edited version of the startupscript written by Professor Kate Anderson
+# thats meant to increase efficency and reduce bugs 
+
+# This script takes in a pickled dictionary where each key is an articleid and the entry is a list containing [year, language, [authorlist], [affiliationlist], [subjectlist], journal] (Note that affiliations are in the same order as authors)
+# It outputs a pandas data frame for papers and their authors, as well as csv flat files for both. 
+
+import pickle as pk
+import sys
+import time
+import re
+import pandas as pd
+import networkx as nx
+
+# This function takes the raw name, and parses it into a list 
+# [last, first, middle]
+def getformattedname(authorname):
+    name_starts = [] #list of where each name begins
+    hyphen_index = -100 #the input file can contain hyphenated names, which need to be removed 
+    try:
+        comma_index = authorname.index(",")
+    except:
+        return authorname
+    name_starts.append((authorname[0], 0)) 
+    for i in xrange(1,len(authorname)):
+        if authorname[i].isupper() and ((authorname[i-1] == " " or authorname[i-1] == "-")):
+            # we add the first initial of any name (hyphenated or not) to our list
+            name_starts.append((authorname[i], i))
+        if authorname[i] == '-':
+            hyphen_index = i
+    names = []
+    for i in xrange(len(name_starts)):
+        letter, index = name_starts[i]
+        name = letter
+        j = index + 1
+        if index == 0:
+            while j < comma_index:
+                if authorname[j] == "-":
+                    name += " "
+                else: 
+                    name += authorname[j].lower()
+                j += 1
+        elif index < comma_index:
+            continue
+        else:
+            while j < len(authorname) and (authorname[j].isalpha()):
+                name += authorname[j]
+                j += 1
+        if hyphen_index + 1 == index:
+            if index > comma_index:
+                names[len(names)-1] += " " + name.lower()
+        else:
+            names.append(name.lower()) 
+    if len(names) < 3:
+        names.append("")
+    elif len(names) > 3:
+        for i in xrange(3, len(names)):
+            names[2] += " " + names[i]
+        names = names[:3]        
+    return names
+
+# This function transforms the name into "First;Last" format
+def makefirstlast(formattedname):
+    return formattedname[1] + ';' + formattedname[0]
+
+# This function transforms a name in "Last;First;Middle;Institution" format
+# into "First;Last" format
+def makefirstlast2(formattedname):
+    namelist = formattedname[0].split(';')
+    newname = namelist[1] + ';' + namelist[0]
+    return newname
+
+def main(data): 
+    infile = open(data,'rb')
+    articledata = pk.load(infile)
+    infile.close()
+    # user inputs their preferred time frame to look at 
+    startyear = raw_input("Enter a start year: ")
+    endyear = raw_input("Enter an end year: ")
+    namestub = str(startyear) + '-' + str(endyear)
+    validyears = range(startyear, endyear+1)
+    articledict = {}
+    for a in articledata:
+        year, language, authorlist, affiliations, codelist, journal = articledata[a] 
+        year = int(year)
+        if startyear <= year <= endyear:
+            newauthorlist = []
+            newcodelist = []
+            etal = 0
+            # disambiguating names
+            for i in authorlist:
+                if re.search('_et al.',i) == None:
+                    formattedname = getformattedname(i)
+                    newname = makefirstlast(formattedname)
+                else:
+                    newname = 'et al problem'
+                    etal = 1
+                newauthorlist.append(newname)
+            # translating subject text into 4 digit JEL codes
+            for c in codelist:
+                newcodelist.append(c[len(c)-5:len(c)-2].upper())
+            articledict[a] = [year, language, newauthorlist, affiliations, newcodelist, journal, etal]
+    articledf = pd.DataFrame(articledict, index = ['year','language','authors','affiliations','codes','journal','etal']).transpose()
+    articledf['year'] = articledf['year'].astype(int)
+    articledf['etal'] = articledf['etal'].astype(int)
+    articledf['numauthors'] = 0
+    articledf['numcodes'] = 0
+    for a in articledf.transpose():
+        articledf.loc['numauthors', a] = len(articledf['authors'][a])
+        articledf.loc['numcodes', a]=len(articledf['codes'][a])
+
+    articleyeardict = {}
+    for a in articledf.transpose():
+        year = articledf['year'][a]
+        numauthors = articledf['numauthors'][a]
+        numcodes = articledf['numcodes'][a]
+        temp = articleyeardict.get(year,[0,0,0])
+        articleyeardict[year]= [temp[0] + numauthors, temp[1] + numcodes, temp2[2] + 1]
+
+    for year in articleyeardict:
+        total_authors, total_codes, total_articles = \
+        articleyeardict[year][0], articleyeardict[year][1], articleyeardict[year][2]
+        average_authors = total_authors / float(total_articles)
+        average_codes = total_codes / float(total_articles)
+        articleyeardict[year] = [average_authors, average_codes, total_articles]
+
+    articleyeardf = pd.DataFrame(articleyeardict, index=['average-num-authors','average-num-codes','numpapers']).transpose()    
+    articleyeardf['average-num-authors'] = articleyeardf['average-num-authors'].astype(float)
+    articleyeardf['average-num-codes'] = articleyeardf['average-num-codes'].astype(float)
+    articleyeardf['numpapers'] = articleyeardf['numpapers'].astype(int)
+    articleyeardf = articleyeardf.sort_index()
+
+    author_and_papers = {}
+    for article in articledict:
+        # Note: articledict is already restricted to the relevant years, 
+        # so we don't need another filter here
+        authors = articledict[article][2]
+        for author in authors:
+            papers = author_and_papers.get(a,[])
+            papers.append(article)
+            author_and_papers[author] = papers
+
+    authordict = {}
+    #pip = 0
+    for author in author_and_papers:
+        papers = author_and_papers[author]
+        paperdict = {}
+        affiliations = []
+        coauthors = []
+        codes = []
+        journals = []
+        yeardict = {}
+        latest_year = 0
+        earliest_year = 100000
+        years_active = set()
+        career_length = num_years_active = num_institutions = -1
+        paper_number = 1
+        for p in papers:
+            paper_number +=1
+            record = articledata[p]
+            # dictionary that stores all of the information for every paper
+            paperdict[p] = record
+            # get year, years active, first year, last year
+            year = int(record[0])
+            if year < earliest_year:
+                earliest_year = year
+            if year > latest_year:
+                latest_year = year
+            years_active.add(year)
+            # get list of coauthors
+            author_list = record[2]
+            selfindex = -1
+            index = 0
+            for coauthor in author_list:
+                if coauthor != author:
+                    coauthors.append(coauthor)
+                elif coauthor == author:
+                    selfindex = index
+                index += 1
+            # get affiliations and add them to the list
+            article_affiliations = record[3]
+            if len(article_affiliations) == len(author_list):
+                ownaffiliation = article_affiliations[selfindex]
+            elif len(affiliations) != len(author_list):
+                ownaffiliation = "Missing"
+            affiliations.append(ownaffiliation)
+            # codes added
+            code_list = record[4]
+            codes.extend(code_list)
+            # journals added
+            journal = record[5]
+            journals.append(journal)
+        yearsactive = sorted(list(yearsactive))
+        affiliationlist = list(set(affiliationlist))
+        numaffiliations = len(affiliationlist)
+        coauthors = list(set(coauthors))
+        numcoauthors = len(coauthors)
+        codes = list(set(codes))
+        numuniquecodes = len(codes)
+        journals = list(set(journals))
+        numuniquejournals = len(journals)
+        numyearsactive = len(yearsactive)
+        careerlength = latest_year - earlist_year + 1
+        numpapers = len(papers)
+        numpapersperyear = numpapers / float(careerlength)
+        numcodesperpaper = numuniquecodes / float(numpapers)
+        authordict[author] = [paperlist, paperdict, numpapers, yearsactive, numyearsactive, firstyear, lastyear, careerlength, numpapersperyear, coauthors, numcoauthors, affiliationlist, numaffiliations, codes, numuniquecodes, numcodesperpaper, journals, numuniquejournals] 
+
+    authordf = pd.DataFrame(authordict, index = ['paperlist', 'paperdict', 'numpapers', 'yearsactive', 'numyearsactive', 'firstyear', 'lastyear', 'careerlength', 'numpapersperyear', 'coauthors', 'numcoauthors', 'affiliationlist', 'numaffiliations', 'codes', 'numuniquecodes', 'numcodesperpaper', 'journals', 'numuniquejournals']).transpose()
+
+    integer_cats = ['numpapers','numyearsactive','firstyear','lastyear','careerlength','numcoauthors','numaffiliations','numuniquecodes','numuniquejournals']
+    float_cats = ['numpapersperyear', 'numcodesperpaper'] 
+    for cat in integer_cats:
+        authordf[cat]=authordf[cat].astype(int)
+    for cat in float_cats:
+        authordf[cat] = authordf[cat].astype(float)
+
+    outname = "disambiguated-article-data-" + namestub + ".csv"
+    articledf.to_csv(outname,cols = ['year','authors','affiliations','codes','journal','numauthors','numcodes'])
+
+    outname = "disambiguated-author-data-" + namestub + ".csv"
+    authordf.to_csv(outname,cols = ['paperlist', 'paperdict', 'numpapers', 'yearsactive', 'numyearsactive', 'firstyear', 'lastyear', 'careerlength', 'numpapersperyear', 'coauthors', 'numcoauthors', 'affiliationlist', 'numaffiliations', 'codes', 'numuniquecodes', 'numcodesperpaper', 'journals', 'numuniquejournals'])
+
+    outname = "disambiguated-article-dataframe-" + namestub + ".pkl"
+    infile = open(outname,'wb')
+    pk.dump(articledf, infile)
+    infile.close()
+
+    outname = "disambiguated-yearbyyear-dataframe-" + namestub + ".pkl"
+    infile = open(outname,'wb')
+    pk.dump(articleyeardf, infile)
+    infile.close()
+
+    outname = "disambiguated-author-dataframe-" + namestub + ".pkl"
+    infile = open(outname,'wb')
+    pk.dump(authordf, infile)
+    infile.close()
+
+    outname = "disambiguated-article-dict-" + namestub + ".pkl"
+    infile = open(outname,'wb')
+    pk.dump(articledict, infile)
+    infile.close()
+
+    outname = "disambiguated-yearbyyear-dict-" + namestub + ".pkl"
+    infile = open(outname,'wb')
+    pk.dump(articleyeardict, infile)
+    infile.close()
+
+    outname = "disambiguated-author-dict-" + namestub + ".pkl"
+    infile = open(outname,'wb')
+    pk.dump(authordict, infile)
+    infile.close()
+    return "Finished"
