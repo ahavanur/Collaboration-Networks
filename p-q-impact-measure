@@ -1,0 +1,161 @@
+# p is a measure of the likelihood that an author is working with an author that they 
+# have never previously collaborated with, while q is a measure that someone is 
+# collaborating with someone who has never published before (in that time frame)
+
+# this script takes an article data frame and calculates the p and q values 
+# for every author in each year in the dataframes time period. It also takes in 
+# journal impact scores and measures differences between p and q impact. 
+import pickle as pk
+import numpy as np
+import pylab as P
+import string
+import math
+def p_q_impact(data, impacts):
+    infile = open(data, "rb")
+    infile = pk.load(infile)
+    yearly = dict()
+    errors = []
+    for year in xrange(1991, 2011):
+        yearly[str(year)] = []
+
+    for article in infile: 
+        year = infile[article][0]
+        if str(year) in yearly: 
+            yearly[str(year)].append(article)
+
+    authors = dict()
+    for year in xrange(1991, 2011):
+        for article in yearly[str(year)]: 
+            for author in infile[article][2]:
+                if author not in authors: 
+                    authors[author] = [[], set(), 0, 0, 0, 0, [], [], [], [], []] 
+    # The fields for the authors dictionary are: 0. previous articles, 1. collaborators, 
+    # 2.p, 3. q, 4. not p, 5. not q, 6. overall impacts, 7. p-only impact, 8. q-only impact, 
+    # 9. not-p impact, 10. not-q impact
+    distribution = dict()
+
+    journalimpacts = {}
+    with open(impacts,'rU') as f:
+        lines = f.readlines()
+        for line in lines:
+            impact = float(line[0:6])
+            name = str(line[7:]).strip()
+            if name[0] != '#':
+                journalimpacts[name] = impact
+
+    for year in xrange(1991, 2011): 
+        p_list = []
+        q_list = []
+        overall_impact_list = []
+        p_impact_list = []
+        q_impact_list = []
+        not_p_impact_list = []
+        not_q_impact_list = []
+        year = str(year) 
+        for article in yearly[year]: 
+            article_authors = infile[article][2]
+            article_journalthey are  = infile[article][5]
+            impact = 0
+            for journal in journalimpacts:
+                if article_journal.upper() in journal:
+                    impact = journalimpacts[journal.upper()]
+            for author in article_authors: 
+                prev_collaborators = authors[author][1]
+                prev_works = authors[author][0]
+                authors[author][6].append(impact)
+                for coauthor in article_authors: 
+                    if coauthor in prev_collaborators: 
+                        authors[author][3] += 1
+                        authors[author][8].append(impact)
+                    else: 
+                        authors[author][5] += 1 
+                        authors[author][10].append(impact)
+                    coauthors_prev_works = authors[coauthor][0]
+                    if len(coauthors_prev_works) == 0:
+                        authors[author][2] += 1
+                        authors[author][7].append(impact)
+                    else: 
+                        authors[author][4] += 1
+                        authors[author][9].append(impact)
+        for article in yearly[year]: 
+            article_authors = infile[article][2]
+            for author in article_authors:
+                authors[author][0].append(article)
+                for article_coauthor in article_authors: 
+                    if article_coauthor != author: 
+                        authors[author][1].add(article_coauthor)
+            for author in infile[article][2]:
+                for i in xrange(6, 11):
+                    if authors[author][i] == []:
+                        authors[author][i].append(0)
+                p = float(authors[author][2]) / (authors[author][2] + authors[author][4]) 
+                q = float(authors[author][3]) / (authors[author][3] + authors[author][5])
+                imp = np.mean(authors[author][6])
+                p_impact = np.mean(authors[author][7])
+                q_impact = np.mean(authors[author][8])
+                not_p_impact = np.mean(authors[author][9])
+                not_q_impact = np.mean(authors[author][10])
+                p_list.append(p)
+                q_list.append
+                overall_impact_list.append(imp)
+                p_impact_list.append(p_impact)
+                q_impact_list.append(q_impact)
+                not_p_impact_list.append(not_p_impact)
+                not_q_impact_list.append(not_q_impact)
+            for impact_list in [overall_impact_list, p_impact_list, q_impact_list, not_p_impact_list, not_q_impact_list]:
+                if impact_list == []:
+                    impact_list.append(0)
+        distribution[year] = [p_list, q_list, overall_impact_list, p_impact_list, q_impact_list, not_p_impact_list, not_q_impact_list]
+
+
+
+    p_averages = dict()
+    q_averages = dict()
+    overall_impact_averages = dict()
+    p_impact_averages = dict()
+    q_impact_averages = dict()
+    not_p_impact_averages = dict()
+    not_q_impact_averages = dict()
+
+    categories = ['min', 'max', 'mean', 'median', 'mode', 'stdev']
+    averages = [p_averages, q_averages, overall_impact_averages, p_impact_averages, q_impact_averages, not_p_impact_averages, not_q_impact_averages]
+    names = ['p', 'q', 'overall impact', 'p impact', 'q impact', 'not p impact', 'not q impact'] 
+    for measure in averages: 
+        for category in categories: 
+            measure[category] = []
+
+    for int_year in xrange(1991,2011): 
+        year = str(int_year)
+        # name = "p distribution" + year + ".png"
+        # n, bins, patches = P.hist(distribution[year][0], 10, normed=1, histtype='stepfilled')
+        # P.savefig(name)
+        # name = "q distribution" + year + ".png"
+        # n, bins, patches = P.hist(distribution[year][0], 10, normed=1, histtype='stepfilled')
+        # P.savefig(name)
+        for num in xrange(len(averages)):
+            name = names[num] + ' ' + str(year) + ' distribution.txt'
+            measure = averages[num]
+            measure['min'].append(min(distribution[year][num]))
+            measure['max'].append(max(distribution[year][num]))
+            measure['mean'].append(np.mean(distribution[year][num]))
+            measure['median'].append(np.median(distribution[year][num]))
+            measure['mode'].append(max(set(distribution[year][num]), key=distribution[year][num].count))
+            measure['stdev'].append(np.std(distribution[year][num]))
+            with open(name, 'wt') as fout: 
+                fout.write(str(distribution[year][num]))
+
+    with open("p_averages.csv", 'wt') as fout: 
+        fout.write(str(p_averages))
+    with open("q_averages.csv", 'wt') as fout: 
+        fout.write(str(q_averages))
+    with open("overall_impact_averages.csv", 'wt') as fout: 
+        fout.write(str(overall_impact_averages))
+    with open("p_impact_averages.csv", 'wt') as fout: 
+        fout.write(str(p_impact_averages))
+    with open("q_impact_averages.csv", 'wt') as fout: 
+        fout.write(str(q_impact_averages))
+    with open("not_p_impact_averages.csv", 'wt') as fout: 
+        fout.write(str(not_p_impact_averages))
+    with open("not_q_impact_averages.csv", 'wt') as fout: 
+        fout.write(str(not_q_impact_averages))
+  return "Finished"
