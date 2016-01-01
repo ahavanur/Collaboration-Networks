@@ -1,0 +1,520 @@
+#this code analyzes a network for its various attributes over varying timespans within a start and end year. 
+
+import networkx as nx
+import pickle as pk
+import matplotlib
+import matplotlib.pyplot as plt
+import sys
+import time
+import re
+import pandas as pd
+import os
+
+def load_network(network):
+    return nx.read_gml(network)
+
+def number_of_authors(network): 
+    return nx.number_of_nodes(network)
+
+def number_of_papers(articledata):
+    return len(articledata)
+
+def papers_per_author(authordata): #average 
+    numpapers = []
+    for key in authordata:
+        numpapers.append(authordata[key][2])
+    return numpapers, float(sum(numpapers))/len(numpapers)
+
+def papers_per_author_distribution(papers_per_author, start_year, end_year):
+    n, bins, patches = plt.hist(papers_per_author, len(papers_per_author), normed = 100, facecolor = 'b', alpha = .75)
+    plt.xlabel('Number of Papers')
+    plt.ylabel('Frequency')
+    plt.title("Papers Per Author")
+    plt.axis([min(papers_per_author), max(papers_per_author), 0, 1.0])
+    name = "Papers Per Author Distribution " + start_year + "-" + end_year 
+    plt.savefig(name + ".png")  
+
+def authors_per_paper(articledata): #average
+    numauthors = []
+    for article in articledata:
+        numauthors.append(len(articledata[article][2]))
+    return numauthors, float(sum(numauthors))/len(numauthors)
+
+def authors_per_paper_distribution(authors_per_paper):
+    n, bins, patches = plt.hist(authors_per_author, len(authors_per_author), normed = 100, facecolor = 'b', alpha = .75)
+    plt.xlabel('Number of Authors')
+    plt.ylabel('Frequency')
+    plt.title("Authors Per Paper")
+    plt.axis([min(authors_per_paper), max(authors_per_paper), 0, 1.0])
+    name = "Authors Per Paper Distribution " + start_year + "-" + end_year 
+    plt.savefig(name + ".png")  
+
+def average_collaborators(network):
+    degrees = network.degree().values()
+    return degrees, float(sum(degrees))/len(degrees)
+
+def average_collaborators_distribution(average_collaborators):
+    n, bins, patches = plt.hist(average_collaborators, len(average_collaborators), normed = 100, facecolor = 'b', alpha = .75)
+    plt.xlabel('Number of Collaborators')
+    plt.ylabel('Frequency')
+    plt.title("Collaborators Per Author")
+    plt.axis([min(average_collaborators), max(average_collaborators), 0, 1.0])
+    name = "Collaboration Distribution " + start_year + "-" + end_year 
+    plt.savefig(name + ".png")  
+
+def largest_component(network):
+    return sorted(list(nx.connected_components(network)))[-1:]
+
+def average_distance(network):
+    pathlengths = []
+    for node in network.nodes():
+        spl = nx.single_source_shortest_path_length(network,node)
+        for p in spl.values():
+            pathlengths.append(p)
+    return pathlengths, float(sum(pathlengths))/len(pathlengths)
+
+def pathlength_distribution(pathlengths):
+    n, bins, patches = plt.hist(pathlengths, len(pathlengths), normed = 100, facecolor = 'b', alpha = .75)
+    plt.xlabel('Length of Path')
+    plt.ylabel('Frequency')
+    plt.title("Path Lengths")
+    plt.axis([min(pathlengths), max(pathlengths), 0, 1.0])
+    name = "Pathlength Distribution " + start_year + "-" + end_year 
+    plt.savefig(name + ".png")  
+
+def largest_distance(network):
+    pathlengths = []
+    for node in network.nodes():
+        spl = nx.single_source_shortest_path_length(G,node)
+        for p in spl.values():
+            pathlengths.append(p)
+    return sorted(pathlengths.values())[-1:]
+
+def clustering_coefficent(network):
+    return nx.average_clustering(network)
+
+def betweenness_centrality(network): 
+    betweens = nx.betweenness_centrality(network)
+    return betweens, float(sum(betweens))/len(betweens)
+
+def betweenness_distribution(between_list, start_year, end_year):
+    n, bins, patches = plt.hist(between_list, len(between_list), normed = 100, facecolor = 'b', alpha = .75)
+    plt.xlabel('Betweenness')
+    plt.ylabel('Frequency')
+    plt.title("Betweenness Centrality")
+    plt.axis([min(between_list), max(between_list), 0, 1.0])
+    name = "Betweenness Distribution " + start_year + "-" + end_year 
+    plt.savefig(name + ".png")   
+
+def run_analysis(start_year, end_year):
+    network = "aa_" + start_year[2:] + "_" + end_year[2:] + ".gml"
+    network = load_network(network)
+    article_pickle = "disambiguated-article-dict-" + str(start_year) + "-" + str(end_year) + "-v2.pkl"
+    try:
+        article_infile = open(article_pickle,'rb')
+    except:
+        article_pickle = "disambiguated-article-dict-" + str(start_year) + "-" + str(end_year) + ".pkl"
+        article_infile = open(article_pickle, 'rb')
+    articledata = pk.load(article_infile)
+    article_infile.close()
+    author_pickle = "disambiguated-author-dict-" + str(start_year) + "-" + str(end_year) + "-v2.pkl"
+    try:
+        author_infile = open(author_pickle, 'rb')
+    except:
+        author_pickle = "disambiguated-author-dict-" + str(start_year) + "-" + str(end_year) + ".pkl"
+        author_infile = open(author_pickle, 'rb')
+    authordata = pk.load(author_infile)
+    author_infile.close()
+    papers_per_author_list, average_papers = papers_per_author(authordata)
+    authors_per_paper_list, average_authors = authors_per_paper(articledata)
+    collaborators_per_author_list, avg_collaborators = average_collaborators(network)
+    pathlengths, average_pathlength = average_distance(network)
+    between_list, average_betweenness = betweenness_centrality(network)
+    papers_per_author_distribution(papers_per_author_list, start_year, end_year)
+    authors_per_paper_distribution(autors_per_paper_list, start_year, end_year)
+    average_collaborators_distribution(collaborators_per_author_list, start_year, end_year)
+    pathlength_distribution(pathlengths)
+    betweenness_distribution(between_list)
+    return [number_of_authors(network), number_of_papers(articledata), average_papers, average_authors, avg_collaborators, largest_component(network)]
+
+def getformattedname(authorname):
+    name_starts = [] #list of where each name begins
+    hyphen_index = -100 #the input file can contain hyphenated names, which need to be removed 
+    try:
+        comma_index = authorname.index(",")
+    except:
+        return authorname
+    name_starts.append((authorname[0], 0)) 
+    for i in xrange(1,len(authorname)):
+        if authorname[i].isupper() and ((authorname[i-1] == " " or authorname[i-1] == "-")):
+            # we add the first initial of any name (hyphenated or not) to our list
+            name_starts.append((authorname[i], i))
+        if authorname[i] == '-':
+            hyphen_index = i
+    names = []
+    for i in xrange(len(name_starts)):
+        letter, index = name_starts[i]
+        name = letter
+        j = index + 1
+        if index == 0:
+            while j < comma_index:
+                if authorname[j] == "-":
+                    name += " "
+                else: 
+                    name += authorname[j].lower()
+                j += 1
+        elif index < comma_index:
+            continue
+        else:
+            while j < len(authorname) and (authorname[j].isalpha()):
+                name += authorname[j]
+                j += 1
+        if hyphen_index + 1 == index:
+            if index > comma_index:
+                names[len(names)-1] += " " + name.lower()
+        else:
+            names.append(name.lower()) 
+    if len(names) < 3:
+        names.append("")
+    elif len(names) > 3:
+        for i in xrange(3, len(names)):
+            names[2] += " " + names[i]
+        names = names[:3]        
+    return names
+
+# This function transforms the name into "First;Last" format
+def makefirstlast(formattedname):
+    newname = formattedname[1]
+    newname = newname + ";" + formattedname[0]
+    return newname
+
+# This function transforms a name in "Last;First;Middle;Institution" format
+# into "First;Last" format
+def makefirstlast2(formattedname):
+    namelist = formattedname[0].split(';')
+    newname = namelist[1] + ';' + namelist[0]
+    return newname
+    
+    
+    
+# A function which adds a list to a dictionary with entries that are already lists
+
+def generate_disambiguated_dicts(articledata, startyear, endyear):
+    startyear = int(startyear)
+    endyear = int(endyear)
+    articledict = {}
+    for a in articledata:
+        year = int(articledata[a][0])
+        if year <= endyear and year >= startyear:
+            language = articledata[a][1]
+            authorlist = articledata[a][2]
+            affiliations = articledata[a][3]
+            codelist = articledata[a][4]
+            journal = articledata[a][5]
+            newauthorlist = []
+            newcodelist = []
+            etal = 0
+            # disambiguating names
+            for i in authorlist:
+                if re.search('_et al.',i) == None:
+                    formattedname = getformattedname(i)
+                    newname = makefirstlast(formattedname)
+                else:
+                    newname = 'et al problem'
+                    etal = 1
+                newauthorlist.append(newname)
+            # translating subject text into 4 digit JEL codes
+            for c in codelist:
+                actualcode = c[-5:-2]
+                actualcode = actualcode.upper()
+                newcodelist.append(actualcode)
+            articledict[a] = [year, language, newauthorlist, affiliations, newcodelist, journal, etal]
+            # In doing this, we have tagged all of the articles with an et al problem. 
+            # 1.8% of articles in the full time range have this problem
+            # But from 2006-2010, only 0.3% of articles have this problem     
+    # This is a pandas dataframe for the articles
+    articledf = pd.DataFrame(articledict, index = ['year','language','authors','affiliations','codes','journal','etal']).transpose()
+    articledf['year']=articledf['year'].astype(int)
+    articledf['etal']=articledf['etal'].astype(int)
+    articledf['numauthors'] = 0
+    articledf['numcodes'] = 0
+    for a in articledf.transpose():
+        articledf['numauthors'][a]=len(articledf['authors'][a])
+        articledf['numcodes'][a]=len(articledf['codes'][a])
+
+    # Note that there are 412893 articles from 1991-2010
+    articleyeardict = {}
+    for a in articledf.transpose():
+        year = articledf['year'][a]
+        numauthors = articledf['numauthors'][a]
+        numcodes = articledf['numcodes'][a]
+        temp = articleyeardict.get(year,[0,0,0])
+        temp0 = temp[0]
+        temp0 = temp0 + numauthors
+        temp1 = temp[1]
+        temp1 = temp1 + numcodes
+        temp2 = temp[2]
+        temp2 += 1
+        articleyeardict[year]= [temp0, temp1, temp2]
+
+    for y in articleyeardict:
+        temp = articleyeardict[y]
+        totala = temp[0]
+        totalc = temp[1]
+        numarticles = temp[2]
+        avga = totala / float(numarticles)
+        avgc = totalc / float(numarticles)
+        new = [avga, avgc, numarticles]
+        articleyeardict[y] = new
+
+    articleyeardf = pd.DataFrame(articleyeardict, index=['average-num-authors','average-num-codes','numpapers']).transpose()    
+    articleyeardf[['average-num-authors','average-num-codes']] = articleyeardf[['average-num-authors','average-num-codes']].astype(float)
+    articleyeardf['numpapers']=articleyeardf['numpapers'].astype(int)
+    articleyeardf = articleyeardf.sort_index()
+    # authorpaperlist is a disambiguated version of authors in the relevant date range
+    authorpaperlist = {}
+    index = 0
+    for i in articledict:
+        # Note: articledict is already restricted to the relevant years, 
+        # so we don't need another filter here
+        authorlist = articledict[i][2]
+        for a in authorlist:
+            temp = authorpaperlist.get(a,[])
+            temp.append(i)
+            authorpaperlist[a] = temp        
+    authordict = {}
+    for a in authorpaperlist:
+        paperlist = authorpaperlist[a]
+        paperdict = {}
+        affiliationlist = []
+        coauthors = []
+        codes = []
+        journals = []
+        yeardict = {}
+        firstyear = 2010
+        lastyear = 1991
+        yearsactive = []
+        careerlength = -1
+        numyearsactive = -1
+        numinstitutions = -1
+        papernumber = 1
+        for p in paperlist:
+            papernumber +=1
+            record = articledata[p]
+            # dictionary that stores all of the information for every paper
+            paperdict[p] = record
+            # get year, years active, first year, last year
+            year = record[0]
+            #print "publication year"
+            #print year
+            if int(year) > lastyear:
+                lastyear = int(year)
+            if int(year) < firstyear:
+                firstyear = int(year)
+            yearsactive.append(year)
+            # get list of coauthors
+            authorlist = record[2]
+            #print "author list"
+            #print authorlist
+            selfindex = -1
+            index = 0
+            for i in authorlist:
+                if i != a:
+                    coauthors.append(i)
+                elif i == a:
+                    selfindex = index
+                index += 1
+            # get affiliations and add them to the list
+            affiliations = record[3]
+            if len(affiliations) == len(authorlist):
+                ownaffiliation = affiliations[selfindex]
+            elif len(affiliations) != len(authorlist):
+                ownaffiliation = "Missing"
+            affiliationlist.append(ownaffiliation)
+            # codes added
+            codelist = record[4]
+            codes.extend(codelist)
+            # journals added
+            journal = record[5]
+            journals.append(journal)
+        yearsactive = list(set(yearsactive))
+        affiliationlist = list(set(affiliationlist))
+        numaffiliations = len(affiliationlist)
+        coauthors = list(set(coauthors))
+        numcoauthors = len(coauthors)
+        codes = list(set(codes))
+        numuniquecodes = len(codes)
+        journals = list(set(journals))
+        numuniquejournals = len(journals)
+        numyearsactive = len(yearsactive)
+        careerlength = lastyear - firstyear + 1
+        numpapers = len(paperlist)
+        numpapersperyear = numpapers / float(careerlength)
+        numcodesperpaper = numuniquecodes / float(numpapers)
+        authordict[a] = [paperlist, paperdict, numpapers, yearsactive, numyearsactive, firstyear, lastyear, careerlength, numpapersperyear, coauthors, numcoauthors, affiliationlist, numaffiliations, codes, numuniquecodes, numcodesperpaper, journals, numuniquejournals] 
+
+        
+    # This is a pandas dataframe for the author data
+    authordf = pd.DataFrame(authordict, index = ['paperlist', 'paperdict', 'numpapers', 'yearsactive', 'numyearsactive', 'firstyear', 'lastyear', 'careerlength', 'numpapersperyear', 'coauthors', 'numcoauthors', 'affiliationlist', 'numaffiliations', 'codes', 'numuniquecodes', 'numcodesperpaper', 'journals', 'numuniquejournals']).transpose()
+
+    authordf[['numpapers','numyearsactive','firstyear','lastyear','careerlength','numcoauthors','numaffiliations','numuniquecodes','numuniquejournals']]=authordf[['numpapers','numyearsactive','firstyear','lastyear','careerlength','numcoauthors','numaffiliations','numuniquecodes','numuniquejournals']].astype(int)
+
+    authordf[['numpapersperyear', 'numcodesperpaper']] = authordf[['numpapersperyear', 'numcodesperpaper']].astype(float)
+    # With the disambiguation First;Last, there are 215521 unique authors
+    namestub = str(startyear) + '-' + str(endyear)
+    outname = "disambiguated-article-data-" + namestub + ".csv"
+    articledf.to_csv(outname,cols = ['year','authors','affiliations','codes','journal','numauthors','numcodes'])
+
+    outname = "disambiguated-author-data-" + namestub + ".csv"
+    authordf.to_csv(outname,cols = ['paperlist', 'paperdict', 'numpapers', 'yearsactive', 'numyearsactive', 'firstyear', 'lastyear', 'careerlength', 'numpapersperyear', 'coauthors', 'numcoauthors', 'affiliationlist', 'numaffiliations', 'codes', 'numuniquecodes', 'numcodesperpaper', 'journals', 'numuniquejournals'])
+
+    outname = "disambiguated-article-dataframe-" + namestub + ".pkl"
+    infile = open(outname,'wb')
+    pk.dump(articledf, infile)
+    infile.close()
+
+    outname = "disambiguated-yearbyyear-dataframe-" + namestub + ".pkl"
+    infile = open(outname,'wb')
+    pk.dump(articleyeardf, infile)
+    infile.close()
+
+    outname = "disambiguated-author-dataframe-" + namestub + ".pkl"
+    infile = open(outname,'wb')
+    pk.dump(authordf, infile)
+    infile.close()
+
+    outname = "disambiguated-article-dict-" + namestub + ".pkl"
+    infile = open(outname,'wb')
+    pk.dump(articledict, infile)
+    infile.close()
+
+    outname = "disambiguated-yearbyyear-dict-" + namestub + ".pkl"
+    infile = open(outname,'wb')
+    pk.dump(articleyeardict, infile)
+    infile.close()
+
+    outname = "disambiguated-author-dict-" + namestub + ".pkl"
+    infile = open(outname,'wb')
+    pk.dump(authordict, infile)
+    infile.close()
+
+def disambiguate(formattedname):
+    newname = []
+    newname.append(formattedname[1])
+    newname.append(formattedname[0])
+    return newname
+    
+    
+# This is a pair of stupid functions, used to add entries/values to a dictionary
+def push(dict, name, articleid):
+    rep = name[0] + ';' + name[1]
+    existing = dict.get(rep)
+    if existing == None:
+        dict[rep] = [articleid]
+    else:
+        existing.append(articleid)
+        dict[rep] = existing
+
+def addtodict(dictionary, key, value):
+    existing = dictionary.get(key)
+    if existing:
+        existing.append(value)
+        dictionary[key] = existing
+    else:
+        dictionary[key] = [value]
+
+# pajek network generator
+# innet is the network, iddict is the dictionary that matches names with id numbers
+def makepajeknetwork(innet, iddict, outnet):
+    f = open(outnet,'wb')
+    f.write('*network KateNet\n')
+    f.write('*vertices ' + str(len(innet.nodes())) + '\n')
+    for n in innet.nodes():
+        name = n
+        f.write(str(iddict[n]) + ' \"' + n + '\"\n')
+    f.write('*edges\n')
+    for e in innet.edges():
+        node1 = e[0]
+        node2 = e[1]
+        wt = innet[node1][node2]['weight']
+        f.write(str(iddict[node1])+ ' ' + str(iddict[node2]) + ' ' + str(wt) + '\n')
+    f.close()
+
+
+def interactivegeneratenetwork(articledata, start, end):     
+    requiredyears = []
+    year = int(start)
+    stopyear = int(end)
+    while year <= stopyear:
+        requiredyears.append(str(year))
+        year += 1
+    paperlist = []
+    for a in articledata:
+        year = articledata[a][0]
+        if year in requiredyears:
+            paperlist.append(a)
+    aa = nx.Graph()
+    nodes = {}
+    authordict = {}
+    for a in paperlist:
+        record = articledata[a]
+        authors = record[2]
+        for i in xrange(len(authors)):
+            formattedname = getformattedname(authors[i])
+            newname = disambiguate(formattedname)
+            push(authordict, newname, a)    
+    # Each node is labled with the number of papers it's written in the time span
+    for a in authordict:
+        nodes[a]=len(authordict[a])
+    # Add the nodes to the network, with those lables
+    aid = 0
+    nodeid = {}
+    for node in nodes:
+        aid = aid + 1
+        aa.add_node(node,numpubs=nodes[node])
+        nodeid[node]=aid            
+    for p in paperlist:
+        record = articledata[p]
+        authors = record[2]
+        for i in xrange(len(authors) -1):
+            for j in xrange(i+1, len(authors)):
+                name1 = disambiguate(getformattedname(authors[i]))
+                name2 = disambiguate(getformattedname(authors[j]))
+                node1 = name1[0] + ';' + name1[1]
+                node2 = name2[0] + ';' + name2[1]
+                if aa.has_edge(node1,node2):
+                    old_wt = aa[node1][node2]['weight']
+                    new_wt = old_wt + 1
+                    aa.add_edge(node1,node2,weight = new_wt)
+                else:
+                    aa.add_edge(node1,node2,weight = 1)
+    outname = "aa_"+ start[2:] + "_"+ end[2:]
+    makepajeknetwork(aa, nodeid, outname)
+    outname = outname+".gml"
+    try:
+        nx.write_gml(aa,outname)
+    except:
+        pass
+
+def time_series(beginning, ending):
+    infile = open("articledata1991_2010.pkl",'rb')
+    articledata = pk.load(infile)
+    infile.close()
+    series = dict()
+    print "articledata processed. Beginning analysis"
+    for start_year in xrange(beginning, ending+1):
+        for end_year in xrange(beginning, ending+1):
+            if end_year >= start_year:
+                start, end = str(start_year), str(end_year)
+                disamb = "disambiguated-article-dict-" + str(start) + "-" + str(end) + "-v2.pkl"
+                gml = "aa_"+ start[2:] + "_"+ end[2:] + ".gml"
+                if not(os.path.isfile(disamb) and os.path.isfile(gml)):
+                    generate_disambiguated_dicts(articledata, start, end)
+                    interactivegeneratenetwork(articledata, start, end)
+                series[start + end] = run_analysis(start,end)
+                print start + "-" + end + " processed"
+                name = start + "-" + end + ".csv"
+                with open(name, 'wt') as fout:
+                    fout.write(str(series[start+end]))
+    print "Analysis Completed"
+    return series
